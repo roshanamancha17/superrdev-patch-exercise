@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 @CrossOrigin(origins = "http://localhost:5173")
 public class TaskController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final TaskRepository taskRepository;
 
     public TaskController(TaskRepository taskRepository) {
@@ -32,13 +34,20 @@ public class TaskController {
         String query = q == null ? "" : q.trim();
         String searchTerm = "%" + query.toLowerCase() + "%";
 
-        // Parse status filter
+        // Parse status filter; an unknown status is a client error (400), not a server error (500)
         String normalizedStatus = null;
-        if (status != null && !status.isEmpty()) {
-            normalizedStatus = TaskStatus.valueOf(status.toUpperCase()).name();
+        if (status != null && !status.isBlank()) {
+            try {
+                normalizedStatus = TaskStatus.valueOf(status.trim().toUpperCase()).name();
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Invalid status: " + status));
+            }
         }
 
-        
+        // Clamp paging inputs so bad values can't cause a 500 or huge responses
+        page = Math.max(1, page);
+        pageSize = Math.min(Math.max(1, pageSize), MAX_PAGE_SIZE);
 
         System.out.println("[TaskController] q=\"" + query + "\" status=" + normalizedStatus
                 + " page=" + page + " pageSize=" + pageSize);
